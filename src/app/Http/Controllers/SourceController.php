@@ -2,63 +2,93 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Bibliography;
+use App\Models\Source;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\App;
 
 class SourceController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function __construct()
     {
-        //
+        $this->middleware('auth')->except(['index', 'show']);
+        App::setLocale(session('locale', 'en'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
+    public function index(Request $request)
+    {
+        $query = Source::query();
+
+        if ($search = $request->get('author')) {
+            $query->where('authors', 'like', '%' . $search . '%');
+        }
+
+        $sources = $query->orderBy('id', 'desc')->paginate(10);
+
+        return view('sources.index', compact('sources', 'search'));
+    }
+
     public function create()
     {
-        //
+        return view('sources.create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
+        $data = $request->validate([
+            'title' => 'required|string',
+            'authors' => 'required|string',
+            'type' => 'nullable|string',
+            'year' => 'nullable|integer',
+            'formatted_entry' => 'nullable|string',
+        ]);
+
+        $data['user_id'] = Auth::id();
+
+        $source = Source::create($data);
+
+        return redirect()->route('sources.show', $source)
+            ->with('success', __('messages.source_created'));
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function show(Source $source)
     {
-        //
+        return view('sources.show', compact('source'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
+    public function edit(Source $source)
     {
-        //
+        $this->authorize('update', $source);
+
+        return view('sources.edit', compact('source'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
+    public function update(Request $request, Source $source)
     {
-        //
+        $this->authorize('update', $source);
+
+        $data = $request->validate([
+            'title' => 'required|string',
+            'authors' => 'required|string',
+            'type' => 'nullable|string',
+            'year' => 'nullable|integer',
+            'formatted_entry' => 'nullable|string',
+        ]);
+
+        $source->update($data);
+
+        return redirect()->route('sources.show', $source)
+            ->with('success', __('messages.source_updated'));
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
+    public function destroy(Source $source)
     {
-        //
+        $this->authorize('delete', $source);
+
+        $source->delete();
+
+        return redirect()->route('sources.index')
+            ->with('success', __('messages.source_deleted'));
     }
 }

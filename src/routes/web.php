@@ -1,15 +1,28 @@
 <?php
 
-use App\Http\Controllers\CitationStyleController;
-use App\Http\Controllers\BibliographyController;
 use App\Http\Controllers\SourceController;
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
-
-Route::resource('citation-styles', CitationStyleController::class);
-Route::resource('bibliographies', BibliographyController::class);
-Route::resource('sources', SourceController::class);
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/dashboard', function () {
+    return view('dashboard');
+})->middleware(['auth', 'verified'])->name('dashboard');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+Route::resource('sources', SourceController::class)->middleware('auth');
+Route::get('/lang/{lang}', function ($lang) {
+    session(['locale' => in_array($lang, ['en', 'uk']) ? $lang : 'en']);
+    return back();
+})->name('lang.switch');
+
+require __DIR__.'/auth.php';
