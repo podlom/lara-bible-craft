@@ -1,12 +1,11 @@
 <?php
 
-use App\Models\Bibliography;
 use App\Http\Controllers\BibliographyController;
-use App\Http\Controllers\SourceController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SourceController;
+use App\Models\Bibliography;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
-
 
 Route::get('/', function () {
     return view('welcome');
@@ -32,6 +31,7 @@ Route::resource('bibliographies', BibliographyController::class)->middleware('au
 
 Route::get('/lang/{lang}', function ($lang) {
     session(['locale' => in_array($lang, ['en', 'uk']) ? $lang : 'en']);
+
     return back();
 })->name('lang.switch');
 

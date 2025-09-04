@@ -2,12 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Bibliography;
 use App\Models\Source;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\App;
-use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class SourceController extends Controller
@@ -28,7 +26,7 @@ class SourceController extends Controller
         $query = \App\Models\Source::query();
 
         if ($search = $request->get('author')) {
-            $query->where('authors', 'like', '%' . $search . '%');
+            $query->where('authors', 'like', '%'.$search.'%');
         }
 
         $sources = $query->where('user_id', $user->id)

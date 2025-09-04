@@ -4,13 +4,14 @@ namespace App\Console\Commands;
 
 use App\Models\Bibliography;
 use App\Models\Source;
+use App\Services\BiblioParserService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
-use App\Services\BiblioParserService;
 
 class ImportBibliographyCommand extends Command
 {
     protected $signature = 'biblio:import {file} {--bibliography=1}';
+
     protected $description = 'Імпортувати бібліографічний список з текстового файлу';
 
     public function handle(): int
@@ -19,15 +20,17 @@ class ImportBibliographyCommand extends Command
         $bibliographyId = (int) $this->option('bibliography');
 
         // 🔒 Перевірка існування файлу
-        if (!File::exists($path)) {
+        if (! File::exists($path)) {
             $this->error("❌ Файл не знайдено: $path");
+
             return 1;
         }
 
         // 🔒 Перевірка існування бібліографії
         $biblio = Bibliography::find($bibliographyId);
-        if (!$biblio) {
+        if (! $biblio) {
             $this->error("❌ Бібліографія з ID={$bibliographyId} не знайдена.");
+
             return 1;
         }
 
@@ -37,9 +40,9 @@ class ImportBibliographyCommand extends Command
         preg_match_all('/^\d+\.\s+(.+?)(?=\n\d+\.|\z)/sm', $contents, $matches);
         $entries = $matches[1];
 
-        $this->info("📖 Знайдено записів: " . count($entries));
+        $this->info('📖 Знайдено записів: '.count($entries));
 
-        $parser = new BiblioParserService();
+        $parser = new BiblioParserService;
 
         $imported = 0;
         $failed = 0;
@@ -47,7 +50,8 @@ class ImportBibliographyCommand extends Command
         foreach ($entries as $i => $entry) {
             $entry = trim($entry);
             if ($entry === '') {
-                $this->warn("⚠️ Пропущено порожній запис під номером " . ($i + 1));
+                $this->warn('⚠️ Пропущено порожній запис під номером '.($i + 1));
+
                 continue;
             }
 
@@ -66,14 +70,14 @@ class ImportBibliographyCommand extends Command
                 ]);
                 $imported++;
             } catch (\Throwable $e) {
-                $this->warn("⚠️ Не вдалося імпортувати запис #" . ($i + 1));
+                $this->warn('⚠️ Не вдалося імпортувати запис #'.($i + 1));
                 $this->line("    > {$entry}");
-                $this->line("    → Помилка: " . $e->getMessage());
+                $this->line('    → Помилка: '.$e->getMessage());
                 $failed++;
             }
         }
 
-        $this->info("✅ Імпорт завершено.");
+        $this->info('✅ Імпорт завершено.');
         $this->info("   ✔ Успішно: $imported");
         $this->info("   ❌ Пропущено: $failed");
 

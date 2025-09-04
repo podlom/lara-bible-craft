@@ -27,15 +27,19 @@ class BiblioParserService
 
             foreach ($authorParts as $part) {
                 $part = trim($part);
-                if ($part === '') continue;
+                if ($part === '') {
+                    continue;
+                }
 
                 if (preg_match('/^([A-Z][a-z]+)\s+([A-Z]\. ?[A-Z]?\.?)/u', $part, $m)) {
                     $authors[] = ['last_name' => $m[1], 'initials' => trim($m[2])];
+
                     continue;
                 }
 
                 if (preg_match('/^([А-ЯІЇЄҐ][а-яіїєґ’\'\-]+)\s+([А-ЯІЇЄҐ]\. ?[А-ЯІЇЄҐ]?\.?)/u', $part, $m)) {
                     $authors[] = ['last_name' => $m[1], 'initials' => trim($m[2])];
+
                     continue;
                 }
 
