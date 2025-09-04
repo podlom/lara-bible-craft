@@ -2,63 +2,92 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Bibliography;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Auth;
 
 class BibliographyController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
+    public function __construct()
+    {
+        $this->middleware('auth')->except(['index', 'show']);
+        App::setLocale(session('locale', 'en'));
+    }
+
     public function index()
     {
-        //
+        $query = Bibliography::query();
+
+        if (Auth::check()) {
+            $query->where('user_id', Auth::id());
+        }
+
+        $bibliographies = $query->latest()->paginate(10);
+
+        return view('bibliographies.index', compact('bibliographies'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
-        //
+        return view('bibliographies.create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+        ]);
+
+        $bibliography = Bibliography::create([
+            'title' => $validated['title'],
+            'user_id' => Auth::id(),
+        ]);
+
+        return redirect()->route('bibliographies.show', $bibliography)->with('success', __('messages.created_successfully'));
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function show(Bibliography $bibliography)
     {
-        //
+        if (Auth::check() && $bibliography->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        return view('bibliographies.show', compact('bibliography'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
+    public function edit(Bibliography $bibliography)
     {
-        //
+        if ($bibliography->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        return view('bibliographies.edit', compact('bibliography'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
+    public function update(Request $request, Bibliography $bibliography)
     {
-        //
+        if ($bibliography->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+        ]);
+
+        $bibliography->update($validated);
+
+        return redirect()->route('bibliographies.show', $bibliography)->with('success', __('messages.updated_successfully'));
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
+    public function destroy(Bibliography $bibliography)
     {
-        //
+        if ($bibliography->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $bibliography->delete();
+
+        return redirect()->route('bibliographies.index')->with('success', __('messages.deleted_successfully'));
     }
 }

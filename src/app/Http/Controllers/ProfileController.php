@@ -57,4 +57,17 @@ class ProfileController extends Controller
 
         return Redirect::to('/');
     }
+
+    public function updatePagination(Request $request)
+    {
+        $request->validate([
+            'per_page' => ['required', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $user = $request->user();
+        $user->per_page = $request->input('per_page');
+        $user->save();
+
+        return back()->with('status', 'pagination-updated');
+    }
 }

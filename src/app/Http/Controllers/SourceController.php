@@ -7,6 +7,8 @@ use App\Models\Source;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Redirect;
+use Illuminate\View\View;
 
 class SourceController extends Controller
 {
@@ -16,15 +18,25 @@ class SourceController extends Controller
         App::setLocale(session('locale', 'en'));
     }
 
-    public function index(Request $request)
+    public function index(Request $request): View
     {
-        $query = Source::query();
+        $user = Auth::user();
+
+        // Check for per-page setting from user profile or fallback to 10
+        $perPage = $user->per_page ?? config('sources.per_page');
+
+        $query = \App\Models\Source::query();
 
         if ($search = $request->get('author')) {
             $query->where('authors', 'like', '%' . $search . '%');
         }
 
-        $sources = $query->orderBy('id', 'desc')->paginate(10);
+        $sources = $query->where('user_id', $user->id)
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        // \Log::info($query->toSql());
+        // \Log::info($query->getBindings());
 
         return view('sources.index', compact('sources', 'search'));
     }
