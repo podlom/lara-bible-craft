@@ -58,6 +58,19 @@ class ImportBibliographyCommand extends Command
             $parsed = $parser->parse($entry);
 
             try {
+                if (empty($data['title'])) {
+                    // Normalize: remove leading list index like "15." or "15)\t"
+                    $normalized = preg_replace('/^\s*\d+\s*[\.\)]\s*/u', '', $entry);
+
+                    // fallback for standards: use the whole line as title
+                    if (($data['type'] ?? null) === 'standard') {
+                        $data['title'] = trim($normalized, " \t\n\r\0\x0B.");
+                    } else {
+                        // or default to 'other' / skip with a warning
+                        $data['title'] = 'Untitled';
+                    }
+                }
+
                 Source::create([
                     'bibliography_id' => $bibliographyId,
                     'type' => $parsed['type'] ?? 'book',
