@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SourceTypeEnum;
 use Illuminate\Database\Eloquent\Model;
 
 class Source extends Model
@@ -30,6 +31,7 @@ class Source extends Model
     protected $casts = [
         'authors' => 'array',
         'accessed_at' => 'date',
+        'type' => SourceTypeEnum::class,
     ];
 
     public function bibliography()
