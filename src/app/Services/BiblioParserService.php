@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\SourceTypeEnum;
+
 class BiblioParserService
 {
     public function parse(string $raw): array
@@ -132,19 +134,19 @@ class BiblioParserService
         $lower = mb_strtolower($raw);
 
         if (preg_match('/(iso|iec|dstu|rfc|nist|gost|standard|стандарт)/i', $raw)) {
-            $data['type'] = 'standard';
+            $data['type'] = SourceTypeEnum::STANDARD->value; // 'standard';
         } elseif (preg_match('/(https?:\/\/|www\.|doi\.org)/i', $raw)) {
-            $data['type'] = 'web'; // website
+            $data['type'] = SourceTypeEnum::WEB->value; // 'web'; // website
         } elseif (preg_match('/(journal|журнал|том|випуск|volume|issue|no\.)/i', $raw)) {
-            $data['type'] = 'article';
+            $data['type'] = SourceTypeEnum::ARTICLE->value; // 'article';
         } elseif (preg_match('/(report|звіт|brief|review|огляд)/i', $raw)) {
-            $data['type'] = 'report';
+            $data['type'] = SourceTypeEnum::REPORT->value; // 'report';
         } elseif (preg_match('/(gdpr|law|regulation|reglament|закон|норматив)/i', $raw)) {
-            $data['type'] = 'law';
+            $data['type'] = SourceTypeEnum::LAW->value; // 'law';
         } elseif (preg_match('/(thesis|dissertation|дисертація|магістерська|кваліфікаційна)/i', $raw)) {
-            $data['type'] = 'thesis';
+            $data['type'] = SourceTypeEnum::THESIS->value; // 'thesis';
         } else {
-            $data['type'] = 'book';
+            $data['type'] = SourceTypeEnum::BOOK->value; // 'book';
         }
 
         return $data;
