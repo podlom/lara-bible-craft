@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('sources', function (Blueprint $table) {
             $table->enum('type', [
-                'book','article','report','law','thesis','web','other',
+                'book', 'article', 'report', 'law', 'thesis', 'web', 'other',
                 'standard', // ⟵ added this
             ])->default('book')->change();
         });
@@ -26,7 +26,7 @@ return new class extends Migration
     {
         Schema::table('sources', function (Blueprint $table) {
             $table->enum('type', [
-                'book','article','report','law','thesis','web','other',
+                'book', 'article', 'report', 'law', 'thesis', 'web', 'other',
             ])->default('book')->change();
         });
     }

@@ -12,7 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('sources', function (Blueprint $table) {
-            $table->foreignId('user_id')->nullable()->constrained()->onDelete('cascade');
+            // Put next to bibliography_id for clarity
+            $table->foreignId('user_id')
+                ->nullable()
+                ->after('bibliography_id')
+                ->constrained()        // defaults to 'users' table and 'id' column
+                ->nullOnDelete();      // when user is deleted, keep the source but null the user_id
         });
     }
 
@@ -22,7 +27,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('sources', function (Blueprint $table) {
-            //
+            $table->dropConstrainedForeignId('user_id'); // drops FK and column in one go (Laravel 9+)
         });
     }
 };

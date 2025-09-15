@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\File;
 
 class ImportBibliographyCommand extends Command
 {
+    private const IMPORT_USER_ID = 1;
+
     protected $signature = 'biblio:import {file} {--bibliography=1}';
 
     protected $description = 'Імпортувати бібліографічний список з текстового файлу';
@@ -58,34 +60,54 @@ class ImportBibliographyCommand extends Command
             $parsed = $parser->parse($entry);
 
             try {
-                if (empty($data['title'])) {
-                    // Normalize: remove leading list index like "15." or "15)\t"
-                    $normalized = preg_replace('/^\s*\d+\s*[\.\)]\s*/u', '', $entry);
+                $data = $parsed;
 
-                    // fallback for standards: use the whole line as title
-                    if (($data['type'] ?? null) === 'standard') {
-                        $data['title'] = trim($normalized, " \t\n\r\0\x0B.");
-                    } else {
-                        // or default to 'other' / skip with a warning
-                        $data['title'] = 'Untitled';
+                // Defensive fallback if title is still empty:
+                if (empty($data['title'])) {
+                    // Try again directly on the raw/normalized string
+                    $normalized = preg_replace('/^\s*\d+\s*[\.\)]\s*/u', '', $entryNormalized ?? $entry);
+
+                    if (preg_match('/\*([^*]+?)\*\s*[\.:\-—,]?/u', $normalized, $m)) {
+                        $title = trim($m[1]);
+                        $title = preg_replace('/\.\s*$/u', '', $title);
+                        $data['title'] = $title;
+
+                        if (mb_strpos($title, ':') !== false && empty($data['subtitle'])) {
+                            [$main, $sub] = array_map('trim', explode(':', $title, 2));
+                            if ($main !== '') {
+                                $data['title'] = $main;
+                            }
+                            if (! empty($sub)) {
+                                $data['subtitle'] = $sub;
+                            }
+                        }
                     }
+                }
+
+                // If STILL empty, last resort: use the full line (avoids DB failure, and you can fix later in UI)
+                if (empty($data['title'])) {
+                    $data['title'] = trim($normalized ?? $entry);
                 }
 
                 Source::create([
                     'bibliography_id' => $bibliographyId,
                     'type' => $parsed['type'] ?? 'book',
                     'authors' => json_encode($parsed['authors']),
-                    'title' => $parsed['title'] ?? null,
-                    'year' => $parsed['year'] ?? null,
+                    'title' => $data['title'],
+                    'subtitle' => $data['subtitle'] ?? null,
+                    'year' => $parsed['year'] ?? date('Y'),
                     'formatted_entry' => $entry,
                     'order_in_list' => $i + 1,
                     'global_index' => $i + 1,
+                    'user_id' => self::IMPORT_USER_ID,
                 ]);
+
                 $imported++;
             } catch (\Throwable $e) {
                 $this->warn('⚠️ Не вдалося імпортувати запис #'.($i + 1));
                 $this->line("    > {$entry}");
                 $this->line('    → Помилка: '.$e->getMessage());
+
                 $failed++;
             }
         }

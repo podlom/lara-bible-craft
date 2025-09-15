@@ -3,150 +3,102 @@
 namespace App\Services;
 
 use App\Enums\SourceTypeEnum;
+use App\Helpers\BibleHelper;
 
 class BiblioParserService
 {
     public function parse(string $raw): array
     {
+        // 1) Normalize the raw line
+        $entry = BibleHelper::normalizeEntry($raw);
+
         $data = [
             'authors' => [],
             'title' => null,
-            'year' => null,
+            'subtitle' => null,
+            'responsibility' => null,
             'publisher' => null,
-            'type' => 'book', // дефолт
+            'year' => null,
+            'type' => SourceTypeEnum::BOOK->value, // sensible default
+            'place' => null,
         ];
 
-        // 1) Прибрати нумерацію "16." на початку
-        $normalized = preg_replace('/^\s*\d+\s*[\.\)]\s*/u', '', $raw);
+        // 2) Extract title between asterisks. Examples:
+        // "ENISA. *Threat Landscape 2023.* European Union Agency for Cybersecurity, 2023."
+        // "NIST. *Framework for Improving Critical Infrastructure Cybersecurity. Version 2.0*. — Gaithersburg, MD: NIST, 2024."
+        // NOTE: we allow trailing punctuation right after closing asterisk.
+        if (preg_match('/\*([^*]+?)\*\s*[\.:\-—,]?/u', $entry, $m)) {
+            $title = trim($m[1]);
 
-        // 2) Детектор стандартів (розширений список абревіатур)
-        if (preg_match('/^\s*(ISO(?:\/IEC)?|IEC|NIST|RFC|IETF|ETSI|EN|BSI?|ДСТУ|DSTU|ГОСТ)\b/iu', $normalized))
-        {
-            $data['type'] = 'standard';
+            // Strip trailing period inside the italics if present (common in formatted lists)
+            $title = preg_replace('/\.\s*$/u', '', $title);
 
-            // --- 2a) ВАРІАНТ З КОДОМ (ISO/IEC 27001:2018. *Title* Publisher, 2018.)
-            if (preg_match(
-                '/^(?P<code>(?:ISO(?:\/IEC)?|IEC|EN|BSI?|ДСТУ|DSTU|ГОСТ)[^\.]+)\.\s*' .                  // code до крапки
-                '(?P<titleItalics>\*.*?\*)' .                                                           // курсивний заголовок
-                '(?:\.\s*(?P<version>(?:Version|Rev\.?|Ed\.?|Edition)\s*[\w\.\-]+))?' .                 // опційна версія
-                '(?:,\s*(?P<publisher>[^,\.]+))?' .                                                     // опційний видавець
-                '(?:,\s*(?P<year>\d{4}))?' .                                                            // опційний рік
-                '\.?/u',
-                $normalized,
-                $m1
-            )) {
-                $code   = trim($m1['code']);
-                $titleI = trim($m1['titleItalics']);
-                $title  = rtrim($code, '.') . '. ' . rtrim($titleI, '.');
+            $data['title'] = $title;
 
-                if (!empty($m1['version'])) {
-                    $title .= ' ' . trim($m1['version']);
+            // Optional: split title/subtitle on colon IF you store subtitle separately
+            if (mb_strpos($title, ':') !== false) {
+                [$main, $sub] = array_map('trim', explode(':', $title, 2));
+                if ($main !== '') {
+                    $data['title'] = $main;
                 }
-
-                $data['title'] = $title;
-                if (!empty($m1['publisher'])) $data['publisher'] = trim($m1['publisher']);
-                if (!empty($m1['year']))      $data['year']      = (int) $m1['year'];
-
-                return $data;
-            }
-
-            // --- 2b) ВАРІАНТ БЕЗ КОДУ (NIST. *Title* Version 1.1, Publisher, 2020.)
-            if (preg_match(
-                '/^(?P<org>(?:NIST|RFC|IETF|ETSI|BSI?|EN|ДСТУ|DSTU|ГОСТ))\.\s*' .                        // організація + крапка
-                '(?P<titleItalics>\*.*?\*)' .                                                           // курсивний заголовок
-                '(?:\s*(?P<version>(?:Version|Rev\.?|Ed\.?|Edition)\s*[\w\.\-]+))?' .                   // опційна версія
-                '(?:,\s*(?P<publisher>[^,\.]+))?' .                                                     // опційний видавець
-                '(?:,\s*(?P<year>\d{4}))?' .                                                            // опційний рік
-                '\.?/u',
-                $normalized,
-                $m2
-            )) {
-                $org    = trim($m2['org']);
-                $titleI = trim($m2['titleItalics']);
-
-                // Склеюємо саме так, як ти хочеш бачити у title:
-                // "NIST. *Framework …* Version 1.1"
-                $title = $org . '. ' . rtrim($titleI, '.');
-                if (!empty($m2['version'])) {
-                    $title .= ' ' . trim($m2['version']);
+                if (! empty($sub)) {
+                    $data['subtitle'] = $sub;
                 }
-
-                $data['title'] = $title;
-                if (!empty($m2['publisher'])) $data['publisher'] = trim($m2['publisher']);
-                if (!empty($m2['year']))      $data['year']      = (int) $m2['year'];
-
-                return $data;
             }
-
-            // --- 2c) Фолбек для екзотики: якщо не впізнали структуру, не ламай імпорт
-            // спробуємо взяти все до останнього ", YYYY" як title
-            if (preg_match('/^(?<beforeYear>.+?),\s*\d{4}\.?$/u', $normalized, $mx)) {
-                $data['title'] = rtrim(trim($mx['beforeYear']), '.');
-            } else {
-                // або цілком рядок (без кінцевої крапки)
-                $data['title'] = rtrim($normalized, '.');
-            }
-
-            return $data;
         }
 
-        // Витяг року
-        if (preg_match('/\((\d{4})\)/', $raw, $matches)) {
-            $data['year'] = $matches[1];
+        // 3) Extract year (prefer the last 4-digit year in the line)
+        if (preg_match('/(19|20)\d{2}(?!.*(19|20)\d{2})/u', $entry, $ym)) {
+            $data['year'] = (int) $ym[0];
         }
 
-        // Витяг авторів
-        if (preg_match('/^(.+?)\s*\(\d{4}\)/u', $raw, $matches)) {
-            $authorBlock = trim($matches[1]);
-            $authorParts = preg_split('/,\s*|&| і | та | and /u', $authorBlock);
-            $authors = [];
-
-            foreach ($authorParts as $part) {
-                $part = trim($part);
-                if ($part === '') {
-                    continue;
-                }
-
-                if (preg_match('/^([A-Z][a-z]+)\s+([A-Z]\. ?[A-Z]?\.?)/u', $part, $m)) {
-                    $authors[] = ['last_name' => $m[1], 'initials' => trim($m[2])];
-
-                    continue;
-                }
-
-                if (preg_match('/^([А-ЯІЇЄҐ][а-яіїєґ’\'\-]+)\s+([А-ЯІЇЄҐ]\. ?[А-ЯІЇЄҐ]?\.?)/u', $part, $m)) {
-                    $authors[] = ['last_name' => $m[1], 'initials' => trim($m[2])];
-
-                    continue;
-                }
-
-                $authors[] = ['raw' => $part];
+        // 4) Very light publisher/place hints (optional and safe)
+        //    e.g., "— Gaithersburg, MD: NIST, 2024." or "Pearson, 2023."
+        //    We'll grab "NIST" or "Pearson" if they appear as "Place: Publisher, YEAR"
+        if (preg_match('/[:]\s*([^,:]+)\s*,\s*(19|20)\d{2}\.?/u', $entry, $pm)) {
+            $pub = trim($pm[1]);
+            // avoid super-short accidental matches
+            if (mb_strlen($pub) >= 3) {
+                $data['publisher'] = $pub;
             }
-
-            $data['authors'] = $authors;
+        } elseif (preg_match('/\*\)[^*]*\s+([^,]+)\s*,\s*(19|20)\d{2}\.?/u', $entry)) {
+            // defensive: ignore—rare broken pattern we don't want to match by accident
+        } elseif (! $data['publisher'] && preg_match('/\*\s*([^,]+)\s*,\s*(19|20)\d{2}\.?/u', $entry, $pm2)) {
+            // After the closing * (title), if we see "Publisher, YEAR"
+            $pub = trim($pm2[1]);
+            if (mb_strlen($pub) >= 3) {
+                $data['publisher'] = $pub;
+            }
         }
 
-        // Назва
-        if (preg_match('/\(\d{4}\)\.?\s*(.+)$/u', $raw, $matches)) {
-            $data['title'] = trim($matches[1]);
-        }
+        // 5) 🌐 Тип джерела - TYPE DETECTION (keep/enhance your original rules if you already had them)
+        $lower = mb_strtolower($entry, 'UTF-8');
 
-        // 🌐 Тип джерела (евристики)
-        $lower = mb_strtolower($raw);
-
-        if (preg_match('/(iso|iec|dstu|rfc|nist|gost|standard|стандарт)/i', $raw)) {
-            $data['type'] = SourceTypeEnum::STANDARD->value; // 'standard';
-        } elseif (preg_match('/(https?:\/\/|www\.|doi\.org)/i', $raw)) {
-            $data['type'] = SourceTypeEnum::WEB->value; // 'web'; // website
-        } elseif (preg_match('/(journal|журнал|том|випуск|volume|issue|no\.)/i', $raw)) {
-            $data['type'] = SourceTypeEnum::ARTICLE->value; // 'article';
-        } elseif (preg_match('/(report|звіт|brief|review|огляд)/i', $raw)) {
-            $data['type'] = SourceTypeEnum::REPORT->value; // 'report';
-        } elseif (preg_match('/(gdpr|law|regulation|reglament|закон|норматив)/i', $raw)) {
-            $data['type'] = SourceTypeEnum::LAW->value; // 'law';
-        } elseif (preg_match('/(thesis|dissertation|дисертація|магістерська|кваліфікаційна)/i', $raw)) {
-            $data['type'] = SourceTypeEnum::THESIS->value; // 'thesis';
+        if (preg_match('/\b(standard|iso|nist|en\s?\d|din|dstu|дсту|стандарт)\b/u', $lower)) {
+            $data['type'] = SourceTypeEnum::STANDARD->value;
+        } elseif (preg_match('/\b(report|звіт|brief|review|огляд)\b/u', $lower)) {
+            $data['type'] = SourceTypeEnum::REPORT->value;
+        } elseif (preg_match('/\b(thesis|dissertation|дисертац|магістерськ|кваліфікац)\b/u', $lower)) {
+            $data['type'] = SourceTypeEnum::THESIS->value;
+        } elseif (preg_match('/\b(law|regulation|reglament|закон|норматив|gdpr)\b/u', $lower)) {
+            $data['type'] = SourceTypeEnum::LAW->value;
+        } elseif (preg_match('/\b(journal|magazine|періодич|статт)\b/u', $lower)) {
+            $data['type'] = SourceTypeEnum::ARTICLE->value;
         } else {
-            $data['type'] = SourceTypeEnum::BOOK->value; // 'book';
+            $data['type'] = SourceTypeEnum::BOOK->value;
+        }
+
+        // 6) (Optional) Authors heuristic:
+        // Take the segment before the title and treat it as "author/org." if it ends with a period and
+        // is not just an index number. That will handle "ENISA.", "Symantec (Broadcom).", "NIST." etc.
+        if ($data['title'] && preg_match('/^(.*?)\*\s*'.preg_quote($data['title'], '/').'\*/u', $entry, $am)) {
+            $pre = trim(preg_replace('/^\s*\d+\s*[\.\)]\s*/u', '', $am[1])); // remove any leading index again
+            $pre = rtrim($pre, '.'); // drop trailing period
+            if ($pre !== '') {
+                // For now, store as a single "organization" string in authors[0].
+                // If your schema expects array of people, this still fits (later you can refine).
+                $data['authors'] = [$pre];
+            }
         }
 
         return $data;

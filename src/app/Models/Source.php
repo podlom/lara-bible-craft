@@ -26,6 +26,7 @@ class Source extends Model
         'global_index',
         'chapter_index',
         'chapter_name',
+        'user_id',
     ];
 
     protected $casts = [
@@ -37,5 +38,10 @@ class Source extends Model
     public function bibliography()
     {
         return $this->belongsTo(Bibliography::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class); // sources.user_id → users.id
     }
 }
